@@ -31,7 +31,7 @@ class DropboxController {
                     reject(event);
                 };
                 let formData = new FormData();
-                formData.appendChild('input-file', file);
+                formData.append('input-file', file);
                 ajax.send(formData);
             }));
         });
