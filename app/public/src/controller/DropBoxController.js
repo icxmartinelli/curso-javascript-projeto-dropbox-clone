@@ -6,8 +6,10 @@ class DropboxController {
         this.progressBarEl = this.snackModalEl.querySelector('.mc-progress-bar-fg');
         this.nameFileEl = this.snackModalEl.querySelector('.filename');
         this.timeLeftEl = this.snackModalEl.querySelector('.timeleft');
+        this.listFilesEl = document.querySelector('#list-of-files-and-directories');
         this.connectFirebase();
         this.initEvents();
+        this.readFiles();
     }
     connectFirebase(){
         // Import the functions you need from the SDKs you need
@@ -35,10 +37,26 @@ class DropboxController {
             this.inputFilesEl.click();
         });
         this.inputFilesEl.addEventListener('change', event => {
-            this.uploadTask(event.target.files);
+            this.btnSendFileEl.disabled = true;
+            this.uploadTask(event.target.files).then(responses => {
+                responses.forEach(resp => {
+                    this.getFirebaseRef().push().set(resp.files['input-file']);
+                });
+                this.uploadComplete();
+            }).catch (err => {
+                this.uploadComplete();
+                console.error(err);
+            });
             this.modalShow();
-            this.inputFilesEl.value = '';
         });
+    }
+    uploadComplete(){
+        this.modalShow(false);
+        this.inputFilesEl.value = '';
+        this.btnSendFileEl.disabled = false;
+    }
+    getFirebaseRef(){
+        return firebase.database().ref('/files');
     }
     modalShow(show = true) {
         this.snackModalEl.style.display = (show) ? 'block' : 'none';
@@ -50,7 +68,6 @@ class DropboxController {
                 let ajax = new XMLHttpRequest();
                 ajax.open('POST', '/upload');
                 ajax.onload = event => {
-                    this.modalShow(false);
                     try {
                         resolve(JSON.parse(ajax.responseText));
                     } catch (e) {
@@ -58,7 +75,6 @@ class DropboxController {
                     }
                 };
                 ajax.onerror = event => {
-                    this.modalShow(false);
                     reject(event);
                 };
                 ajax.upload.onprogress = event => {
@@ -106,7 +122,7 @@ class DropboxController {
     }
 
     getFileIconView(file) {
-        switch (file.type) {
+        switch (file.mimetype) {
             case 'folder':
                 return `
                                     <svg width="160" height="160" viewBox="0 0 160 160" class="mc-icon-template-content tile__preview tile__preview--icon">
@@ -267,12 +283,31 @@ class DropboxController {
         }
     }
 
-    getFileView() {
-        return `
-        <li>
+    getFileView(file, key) {
+        let li = document.createElement('li');
+        li.dataset.key = key;
+        li.innerHTML = `
             ${this.getFileIconView(file)}
-        <div class="name text-center">${file.name}</div>
-    </li>
-    `;
+            <div class="name text-center">${file.originalFilename}</div>
+        `;
+        this.initEventsLi(li);
+        return li;
+    }
+
+    readFiles(){
+        this.getFirebaseRef().on('value', snapshot => {
+            this.listFilesEl.innerHTML = '';
+            snapshot.forEach(snapshotItem => {
+                let key = snapshotItem.key;
+                let data = snapshotItem.val()[0];
+                console.log(data, key);
+                this.listFilesEl.appendChild(this.getFileView(data, key));
+            });
+        });
+    }
+    initEventsLi(li) {
+        li.addEventListener('click', e => {
+            li.classList.toggle('selected');
+        });
     }
 }
