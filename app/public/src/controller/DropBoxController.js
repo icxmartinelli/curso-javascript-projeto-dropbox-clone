@@ -1,5 +1,6 @@
 class DropboxController {
     constructor() {
+        this.onselectionchange = new Event('selectionchange');
         this.btnSendFileEl = document.querySelector('#btn-send-file');
         this.inputFilesEl = document.querySelector('#files');
         this.snackModalEl = document.querySelector('#react-snackbar-root');
@@ -7,6 +8,9 @@ class DropboxController {
         this.nameFileEl = this.snackModalEl.querySelector('.filename');
         this.timeLeftEl = this.snackModalEl.querySelector('.timeleft');
         this.listFilesEl = document.querySelector('#list-of-files-and-directories');
+        this.btnNewFolder = document.querySelector('#btn-new-folder');
+        this.btnRename = document.querySelector('#btn-rename');
+        this.btnDelete = document.querySelector('#btn-delete');
         this.connectFirebase();
         this.initEvents();
         this.readFiles();
@@ -286,6 +290,7 @@ class DropboxController {
     getFileView(file, key) {
         let li = document.createElement('li');
         li.dataset.key = key;
+        li.dataset.file = JSON.stringify(file);
         li.innerHTML = `
             ${this.getFileIconView(file)}
             <div class="name text-center">${file.originalFilename}</div>
@@ -299,15 +304,71 @@ class DropboxController {
             this.listFilesEl.innerHTML = '';
             snapshot.forEach(snapshotItem => {
                 let key = snapshotItem.key;
-                let data = snapshotItem.val()[0];
+                // let data = snapshotItem.val()[0];
+                let data = (snapshotItem.val()[0] === undefined) ? snapshotItem.val() : snapshotItem.val()[0];
                 console.log(data, key);
                 this.listFilesEl.appendChild(this.getFileView(data, key));
             });
         });
     }
+    getSelection(){
+        return this.listFilesEl.querySelectorAll('.selected');
+    }
     initEventsLi(li) {
+        this.btnRename.addEventListener('click', e => {
+            let li = this.getSelection()[0];
+            let file = JSON.parse(li.dataset.file);
+            let name = prompt("Novo nome de arquivo:", file.originalFilename);
+            if (name) {
+                file.originalFilename = name;
+                this.getFirebaseRef().child(li.dataset.key).set(file);
+            }
+        });
         li.addEventListener('click', e => {
+            this.listFilesEl.addEventListener('selectionchange', e => {
+                switch (this.getSelection().length) {
+                    case 0:
+                        this.btnDelete.style.display = 'none';
+                        this.btnRename.style.display = 'none';
+                        break;
+                    case 1:
+                        this.btnDelete.style.display = 'block';
+                        this.btnRename.style.display = 'block';
+                        break;
+                    default:
+                        this.btnDelete.style.display = 'block';
+                        this.btnRename.style.display = 'none';
+                }
+            });
+            
+            if (e.shiftKey) {
+                let firstLi = this.listFilesEl.querySelector('.selected');
+                if (firstLi) {
+                    let indexStart;
+                    let indexEnd;
+                    let lis = li.parentElement.childNodes;
+
+                    lis.forEach((el, index) => {
+                        if (firstLi === el) indexStart = index;
+                        if (li === el) indexEnd = index;
+                    });
+                    let index = [indexStart, indexEnd].sort();
+                    lis.forEach((el, i) => {
+                        if (i >= index[0] && i <= index[1]) {
+                            el.classList.add('selected');
+                        }
+                    });
+                    this.listFilesEl.dispatchEvent(this.onselectionchange);
+                    return true;
+                }
+            }
+            if (!e.ctrlKey) {
+                this.listFilesEl.querySelectorAll('li.selected').forEach(el => {
+                    el.classList.remove('selected');
+                });
+            }
             li.classList.toggle('selected');
+            this.listFilesEl.dispatchEvent(this.onselectionchange);
         });
     }
 }
